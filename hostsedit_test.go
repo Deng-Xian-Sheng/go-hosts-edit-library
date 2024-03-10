@@ -18,6 +18,7 @@ package hostedit
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -151,5 +152,58 @@ func TestEdit(t *testing.T) {
 	newIP, exists := updatedHostsEdit.Get("localhost")
 	if !exists || newIP != "127.0.0.3" {
 		t.Errorf("Edit failed to update localhost, got IP %v", newIP)
+	}
+}
+
+// TestDelete 测试Delete方法
+func TestDelete(t *testing.T) {
+	// 创建一个测试用的hosts文件内容
+	hostsContent := `
+127.0.0.1 localhost
+::1 ipv6host
+192.168.1.1 example.com
+# Comment line
+`
+	// 使用createTestHostsFile创建测试文件
+	filePath, err := createTestHostsFile(hostsContent)
+	if err != nil {
+		t.Fatalf("创建测试hosts文件失败: %v", err)
+	}
+	defer os.Remove(filePath) // 测试完成后删除测试文件
+
+	// 使用New函数加载测试文件
+	hostsEdit, err := New(filePath, false)
+	if err != nil {
+		t.Fatalf("New() error = %v, wantErr = false", err)
+	}
+
+	// 删除存在的主机名
+	err = hostsEdit.Delete("example.com")
+	if err != nil {
+		t.Errorf("Delete(example.com) 失败，错误: %v", err)
+	}
+
+	// 确保example.com被删除
+	if hostsEdit.Exists("example.com") {
+		t.Errorf("Delete(example.com) 失败，example.com 仍然存在")
+	}
+
+	// 删除不存在的主机名，不应产生错误
+	err = hostsEdit.Delete("nonexistent.com")
+	if err != nil {
+		t.Errorf("Delete(nonexistent.com) 产生了意外的错误: %v", err)
+	}
+
+	// 验证文件内容
+	contentBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("读取hosts文件失败: %v", err)
+	}
+	content := string(contentBytes)
+	if strings.Contains(content, "example.com") {
+		t.Errorf("文件中仍然包含了被删除的主机名 example.com")
+	}
+	if !strings.Contains(content, "localhost") || !strings.Contains(content, "ipv6host") {
+		t.Errorf("文件不包含预期的其他主机名记录")
 	}
 }

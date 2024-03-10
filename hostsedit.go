@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
 package hostedit
 
 import (
@@ -37,6 +36,7 @@ type Line struct {
 	UndefinedRowsRawStr string
 	IP                  string
 	Host                map[string]struct{} // 注意，会使多个主机之间无序，但是这貌似是不可避免的。
+	IsDelete            bool
 }
 
 // HostsEdit represents the entire hosts file and provides methods to manipulate it.
@@ -141,6 +141,10 @@ func (h *HostsEdit) Exists(host string) bool {
 
 // Edit adds or updates the specified host with the given IP address.
 func (h *HostsEdit) Edit(host, ip string) (err error) {
+	if strings.TrimSpace(host) == "" || strings.TrimSpace(ip) == "" {
+		return errors.New("host or ip cannot be empty")
+	}
+
 	for _, line := range h.Lines {
 		if line.IsComment || line.UndefinedRowsRawStr != "" {
 			continue
@@ -189,6 +193,44 @@ func (h *HostsEdit) Edit(host, ip string) (err error) {
 	err = saveToFile(h.Lines, h.FilePath)
 	if err != nil {
 		return err
+	}
+
+	return
+}
+
+// Delete removes the specified host from the hosts file.
+// not exists no error
+func (h *HostsEdit) Delete(host string) (err error) {
+	for _, line := range h.Lines {
+		if line.IsComment || line.UndefinedRowsRawStr != "" {
+			continue
+		}
+		if _, exists := line.Host[host]; exists {
+			if len(line.Host) > 1 {
+				delete(line.Host, host)
+				err = saveToFile(h.Lines, h.FilePath)
+				if err != nil {
+					return
+				}
+				return
+			} else {
+				line.IsDelete = true
+			}
+		}
+	}
+
+	var updatedLines []*Line
+	for _, line := range h.Lines {
+		if !line.IsDelete {
+			updatedLines = append(updatedLines, line)
+		}
+	}
+
+	h.Lines = updatedLines
+
+	err = saveToFile(h.Lines, h.FilePath)
+	if err != nil {
+		return
 	}
 
 	return
